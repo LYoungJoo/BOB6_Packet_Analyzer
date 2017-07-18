@@ -1,9 +1,10 @@
 #include <iostream>
 #include <cstdint>
 #include <pcap.h>
+#include <net/ethernet.h>
+#include <netinet/ip.h> // #include <net/ip.h> for linux
 
 using namespace std;
-
 
 struct eth {
 	u_int8_t srcmac[6];
@@ -31,7 +32,7 @@ struct eth {
 	}
 };
 
-struct ip {
+struct ip_s {
 	u_int8_t header_len : 4;
 	u_int8_t version : 4;
 	u_int8_t servicetype;
@@ -44,7 +45,7 @@ struct ip {
 	u_int8_t srcip[4];
 	u_int8_t destip[4];
 
-	void printSrcIP(ip *ip_header){
+	void printSrcIP(ip_s *ip_header){
 		cout << "Src IP - ";
 		for(int i = 0; i < 4; ++i) {
 			printf("%d", (int *)((*ip_header).srcip[i]));
@@ -54,7 +55,7 @@ struct ip {
 		cout << endl;
 	}
 
-	void printDestIP(ip *ip_header){
+	void printDestIP(ip_s *ip_header){
 		cout << "Dest IP - ";
 		for(int i = 0; i < 4; ++i) {
 			printf("%d", (int *)((*ip_header).destip[i]));
@@ -95,7 +96,6 @@ struct tcp {
 		printf("%d",my_ntohs(((*tcp_header).destport)));
 		cout << endl;
 	}
-
 };
 
 int main(int argc, char *argv[])
@@ -112,13 +112,17 @@ int main(int argc, char *argv[])
 	const u_char *packet;		/* The actual packet */
 	bool chk;
 	eth *eth_header;
-	ip *ip_header;
+	ip_s *ip_header;
 	tcp *tcp_header;
 	char *data;
 
-	dev = pcap_lookupdev(errbuf);
-	// dev = "dum0"
-	pcap_lookupnet(dev, &net, &mask, errbuf);
+	if( argc < 2 ){ 
+		dev = pcap_lookupdev(errbuf);
+		pcap_lookupnet(dev, &net, &mask, errbuf);
+	}
+	else {
+		dev = argv[1]; 
+	}
 	handle = pcap_open_live(dev, BUFSIZ, 1, 1000, errbuf);
 	pcap_compile(handle, &fp, filter_exp, 0, net);
 	pcap_setfilter(handle, &fp);
@@ -134,13 +138,13 @@ int main(int argc, char *argv[])
 			eth_header->printSrcMAC(eth_header);
 			eth_header->printDestMAC(eth_header);
 
-			if ((*eth_header).type == 8) {
+			if ((*eth_header).type == ntohs(ETHERTYPE_IP)) {
 				cout << "2) IP HEADER" << endl;
-				ip_header = (ip*)(packet+14);
+				ip_header = (ip_s*)(packet+14);
 				ip_header->printSrcIP(ip_header);
 				ip_header->printDestIP(ip_header);
 
-				if ((*ip_header).protocol == 6) {
+				if ((*ip_header).protocol == IPPROTO_TCP) {
 					cout << "3) TCP HEADER" << endl; 
 					tcp_header = (tcp*)(packet+14 + (((*ip_header).header_len) * 4));
 					tcp_header->printSrcPort(tcp_header);
@@ -149,6 +153,10 @@ int main(int argc, char *argv[])
 					cout << "4) DATA" << endl;
 					data = (char *)(packet + 14 + (((*ip_header).header_len) * 4) \
 						 + (((*tcp_header).header_len) * 4));
+					cout << "Data Length - "; 
+					printf("%d\n", ntohs((*ip_header).totallen)) \
+						- (((*ip_header).header_len) * 4) \
+						- (((*tcp_header).header_len) * 4) ;
 					cout << data << endl << endl;
 				}
 			}
