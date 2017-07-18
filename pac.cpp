@@ -14,30 +14,64 @@ class PacketCapture{
 };
 
 struct eth {
-	u_int8_t destip[6];
-	u_int8_t srcip[6];
+	u_int8_t srcmac[6];
+	u_int8_t destmac[6];
 	u_int16_t type;
 
-	void printDestIP(eth *eth_header){
-		cout << "Dest MAC - ";
+	void printSrcMAC(eth *eth_header){
+		cout << "Src MAC - ";
 		for(int i = 0; i < 6; ++i) {
-			printf("%02X", (int *)((*eth_header).destip[i]));
+			printf("%02X", (int *)((*eth_header).srcmac[i]));
 			if ( i != 5)
 				printf(":");
 		}
 		cout << endl;
 	}
 
-	void printSrcIP(eth *eth_header){
-		cout << "Src MAC - ";
+	void printDestMAC(eth *eth_header){
+		cout << "Dest MAC - ";
 		for(int i = 0; i < 6; ++i) {
-			printf("%02X", (int *)((*eth_header).srcip[i]));
+			printf("%02X", (int *)((*eth_header).destmac[i]));
 			if ( i != 5)
 				printf(":");
 		}
 		cout << endl;
 	}
 };
+
+struct ip {
+	u_int8_t header_len : 4;
+	u_int8_t version : 4;
+	u_int8_t servicetype;
+	u_int16_t totallen;
+	u_int16_t identification;
+	u_int16_t fragmentoff;
+	u_int8_t ttl;
+	u_int8_t protocol;
+	u_int16_t headerchksum;
+	u_int8_t srcip[4];
+	u_int8_t destip[4];
+
+	void printSrcIP(ip *ip_header){
+		cout << "SRC IP - ";
+		for(int i = 0; i < 4; ++i) {
+			printf("%d", (int *)((*ip_header).srcip[i]));
+			if ( i != 3)
+				printf(".");
+		}
+		cout << endl;
+	}
+
+	void printDestIP(ip *ip_header){
+		cout << "DEST IP - ";
+		for(int i = 0; i < 4; ++i) {
+			printf("%d", (int *)((*ip_header).destip[i]));
+			if ( i != 3)
+				printf(".");
+		}
+		cout << endl;
+	}
+};	
 
 
 int main(int argc, char *argv[])
@@ -53,6 +87,7 @@ int main(int argc, char *argv[])
 	const u_char *packet;		/* The actual packet */
 	bool chk;
 	eth *eth_header;
+	ip *ip_header;
 
 	dev = pcap_lookupdev(errbuf);
 	pcap_lookupnet(dev, &net, &mask, errbuf);
@@ -68,11 +103,22 @@ int main(int argc, char *argv[])
 			cout << "====== PACKET ======" << endl;
 			cout << "1) ETH HEADER" << endl;
 			eth_header = (eth *)packet;
-			eth_header->printSrcIP(eth_header);
-			eth_header->printDestIP(eth_header);
-			if ( (*eth_header).type == 8 )
+			eth_header->printSrcMAC(eth_header);
+			eth_header->printDestMAC(eth_header);
+
+			if ((*eth_header).type == 8) {
 				cout << "2) IP HEADER" << endl;
-					cout << "IP HEADER!!";
+				ip_header = (ip*)(packet+14);
+				ip_header->printSrcIP(ip_header);
+				ip_header->printDestIP(ip_header);
+				printf("%d",(*ip_header).header_len);
+
+				if ((*ip_header).protocol) {
+					cout << "3) TCP HEADER" << endl; 
+				}
+			}
+				
+
 
 			cout << endl;
 		}
