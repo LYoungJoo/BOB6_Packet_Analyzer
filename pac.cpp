@@ -4,14 +4,6 @@
 
 using namespace std;
 
-class PacketCapture{
-	public:
-		uint16_t my_ntohs(uint16_t val){
-			uint16_t res;
-			res = (((val) & 0xff) << 8) | ((val >> 8) & 0xff);
-			return res;
-		}
-};
 
 struct eth {
 	u_int8_t srcmac[6];
@@ -53,7 +45,7 @@ struct ip {
 	u_int8_t destip[4];
 
 	void printSrcIP(ip *ip_header){
-		cout << "SRC IP - ";
+		cout << "Src IP - ";
 		for(int i = 0; i < 4; ++i) {
 			printf("%d", (int *)((*ip_header).srcip[i]));
 			if ( i != 3)
@@ -63,7 +55,7 @@ struct ip {
 	}
 
 	void printDestIP(ip *ip_header){
-		cout << "DEST IP - ";
+		cout << "Dest IP - ";
 		for(int i = 0; i < 4; ++i) {
 			printf("%d", (int *)((*ip_header).destip[i]));
 			if ( i != 3)
@@ -73,6 +65,38 @@ struct ip {
 	}
 };	
 
+struct tcp {
+	u_int16_t srcport;
+	u_int16_t destport;
+	u_int32_t seqnum;
+	u_int32_t acknum;
+	u_int8_t reserved :4;
+	u_int8_t header_len :4;
+	u_int8_t tcpflag;
+	u_int16_t window;
+	u_int16_t checksum;
+	u_int16_t uregntpoint;
+	u_int32_t tcp_option;
+
+	uint16_t my_ntohs(u_int16_t val){
+		uint16_t res;
+		res = (((val) & 0xff) << 8) | ((val >> 8) & 0xff);
+		return res;
+	}
+
+	void printSrcPort(tcp *tcp_header){
+		cout << "Src port - ";
+		printf("%d",my_ntohs(((*tcp_header).srcport)));
+		cout << endl;
+	}
+
+	void printDestPort(tcp *tcp_header){
+		cout << "Dest port - ";
+		printf("%d",my_ntohs(((*tcp_header).destport)));
+		cout << endl;
+	}
+
+};
 
 int main(int argc, char *argv[])
 {
@@ -80,7 +104,8 @@ int main(int argc, char *argv[])
 	char *dev;			/* The device to sniff on */
 	char errbuf[PCAP_ERRBUF_SIZE];	/* Error string */
 	struct bpf_program fp;		/* The compiled filter */
-	char filter_exp[] = "port 80";	/* The filter expression */
+	//char filter_exp[] = "port 80";	/* The filter expression */
+	char filter_exp[0];
 	bpf_u_int32 mask;		/* Our netmask */
 	bpf_u_int32 net;		/* Our IP */
 	struct pcap_pkthdr *header;	/* The header that pcap gives us */
@@ -88,8 +113,11 @@ int main(int argc, char *argv[])
 	bool chk;
 	eth *eth_header;
 	ip *ip_header;
+	tcp *tcp_header;
+	char *data;
 
 	dev = pcap_lookupdev(errbuf);
+	// dev = "dum0"
 	pcap_lookupnet(dev, &net, &mask, errbuf);
 	handle = pcap_open_live(dev, BUFSIZ, 1, 1000, errbuf);
 	pcap_compile(handle, &fp, filter_exp, 0, net);
@@ -100,7 +128,7 @@ int main(int argc, char *argv[])
 		if (chk == 0)
 			continue;
 		else {
-			cout << "====== PACKET ======" << endl;
+			cout << "======================== PACKET ========================" << endl;
 			cout << "1) ETH HEADER" << endl;
 			eth_header = (eth *)packet;
 			eth_header->printSrcMAC(eth_header);
@@ -111,25 +139,19 @@ int main(int argc, char *argv[])
 				ip_header = (ip*)(packet+14);
 				ip_header->printSrcIP(ip_header);
 				ip_header->printDestIP(ip_header);
-				printf("%d",(*ip_header).header_len);
 
-				if ((*ip_header).protocol) {
+				if ((*ip_header).protocol == 6) {
 					cout << "3) TCP HEADER" << endl; 
+					tcp_header = (tcp*)(packet+14 + (((*ip_header).header_len) * 4));
+					tcp_header->printSrcPort(tcp_header);
+					tcp_header->printDestPort(tcp_header);
+	
+					cout << "4) DATA" << endl;
+					data = (char *)(packet + 14 + (((*ip_header).header_len) * 4) \
+						 + (((*tcp_header).header_len) * 4));
+					cout << data << endl << endl;
 				}
 			}
-				
-
-
-			cout << endl;
 		}
 	}
 }
-/*
-   int main(){
-   char packet[] = {0x00, 0x50};
-//	uint16_t port = ntohs(*(uint16_t*)packet);
-uint16_t port = my_ntohs(*(uint16_t*)packet);
-cout << "prot = " << port  << endl;
-return 0;
-}
- */
